@@ -142,6 +142,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
     }
 
     private void sendSearchRequest(String barcode) {
+        dbResultTxt.setText("Söker...");
         Requests.sendSearchRequest(this, barcode, new Response.Listener<JSONObject>() {
             @Override
             public void onResponse(JSONObject response) {
