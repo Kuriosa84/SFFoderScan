@@ -7,7 +7,6 @@ import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.toolbox.JsonObjectRequest;
-import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 
 import org.json.JSONArray;
@@ -25,8 +24,8 @@ public class Requests {
             object.put("name", name);
             object.put("barcode", barcode);
             object.put("inventory", 0);
-            Date now = new Date();
-            historyObject.put("date", now.toString());
+            long now = System.currentTimeMillis();
+            historyObject.put("date", now);
             historyObject.put("change", 0);
             history.put(historyObject);
             object.put("history", history);
@@ -37,12 +36,12 @@ public class Requests {
         queue.add(request);
     }
 
-    public static void sendSearchRequest(Context context, String barcode, Response.Listener<String> onResult, Response.ErrorListener onError) {
+    public static void sendSearchRequest(Context context, String barcode, Response.Listener<JSONObject> onResult, Response.ErrorListener onError) {
         RequestQueue queue = Volley.newRequestQueue(context);
         Log.d("MYTAG", "scanContent: " + barcode);
         String url = Urls.GET_FIND_BARCODE + barcode;
         Log.d("MYTAG","url: " + url);
-        StringRequest request = new StringRequest(Request.Method.GET, url, onResult, onError);
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, Urls.GET_FIND_BARCODE + barcode, new JSONObject(), onResult, onError);
         queue.add(request);
     }
 

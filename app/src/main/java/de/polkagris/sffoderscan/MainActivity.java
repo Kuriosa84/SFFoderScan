@@ -6,6 +6,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.content.Intent;
 import android.text.InputType;
+import android.text.format.DateFormat;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -21,13 +22,14 @@ import com.android.volley.VolleyError;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity implements OnClickListener {
 
-    private Button scanBtn, searchManuallyBtn;
+    private Button scanBtn, searchManuallyBtn, addToInventoryBtn;
     private TextView contentTxt, dbResultTxt;
-    private String scanContent, dbResult;
+    private String scanContent;
     private String tag = "MYTAG";
 
     @Override
@@ -38,16 +40,6 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         searchManuallyBtn = findViewById(R.id.search_manually_button);
         contentTxt = findViewById(R.id.scan_content);
         dbResultTxt = findViewById(R.id.database_result);
-        if(scanContent != null) {
-            contentTxt.setText(scanContent);
-        } else {
-            Log.d(tag, "scanContent är null");
-        }
-        if(dbResult != null) {
-            dbResultTxt.setText(dbResult);
-        } else {
-            Log.d(tag, "dbResult är null");
-        }
         scanBtn.setOnClickListener(this);
         searchManuallyBtn.setOnClickListener(this);
         Log.d(tag, "Är i onCreate!");
@@ -72,7 +64,6 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        //super.onActivityResult(requestCode, resultCode, data);
         IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if(scanningResult != null) {
             // We have a result
@@ -82,7 +73,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 
             sendSearchRequest(scanContent);
         } else {
-            Toast toast = Toast.makeText(getApplicationContext(), "No scan data received!", Toast.LENGTH_LONG);
+            Toast toast = Toast.makeText(getApplicationContext(), "Ingen data från scanning", Toast.LENGTH_LONG);
             toast.show();
         }
     }
@@ -91,7 +82,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
         builder.setTitle("Streckkod hittades ej i databas");
-        builder.setMessage("Streckkod " + scanContent + " hittades ej. Kontrollera att koden scannats korrekt. Skriv in namnet på varan för att spara i databas");
+        builder.setMessage("Streckkod " + scanContent + " hittades ej. Kontrollera att koden scannats/skrivits korrekt. Skriv in namnet på varan för att spara det i databasen:");
 
         final EditText input = new EditText(MainActivity.this);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
@@ -127,12 +118,13 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
         builder.setTitle("Sök manuellt");
-        builder.setMessage("Skriv in siffrorna i streckkoden, utan mellanslag eller andra tecken, för att söka efter ett foder");
+        builder.setMessage("Skriv in siffrorna i streckkoden, utan mellanslag eller andra tecken, för att söka efter ett foder:");
 
         final EditText input = new EditText(MainActivity.this);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT);
         input.setLayoutParams(params);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
         builder.setView(input);
 
         builder.setPositiveButton("Sök", new DialogInterface.OnClickListener() {
@@ -150,26 +142,37 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
     }
 
     private void sendSearchRequest(String barcode) {
-        Requests.sendSearchRequest(this, barcode, new Response.Listener<String>() {
+        Requests.sendSearchRequest(this, barcode, new Response.Listener<JSONObject>() {
             @Override
-            public void onResponse(String response) {
-                if(response.equals("null")) {
+            public void onResponse(JSONObject response) {
+                Log.d(tag,"Fick svar från databasen");
+                Log.d(tag, response.toString());
+                String name = "Namn";
+                try {
+                    name = response.getString("name");
+                } catch (Exception e) {
+                    Log.d(tag, "Fel vid hämtning av name: " + e);
+                }
+                if(name.equals("null")) {
                     showSaveDialog();
                 } else {
-                    dbResultTxt.setText(response);
+                    showInventoryData(response);
                     addInventoryButtons();
                 }
             }
         }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-
+                Log.d(tag, "Error: " + error);
             }
         });
     }
 
     private void addInventoryButtons() {
-        Button addToInventoryBtn = new Button(this);
+        if(addToInventoryBtn != null) {
+            return;
+        }
+        addToInventoryBtn = new Button(this);
         Button removeFromInventoryBtn = new Button(this);
         addToInventoryBtn.setText("Lägg till i lager");
         removeFromInventoryBtn.setText("Ta från lager");
@@ -225,8 +228,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
                     @Override
                     public void onResponse(JSONObject response) {
                         try {
-                            int newInventory = response.getInt("newInventory");
-                            Toast.makeText(MainActivity.this, "Ny lagerstatus: " + newInventory, Toast.LENGTH_LONG).show();
+                            showInventoryData(response);
+                            Toast.makeText(MainActivity.this, "Lagerstatus uppdaterad", Toast.LENGTH_LONG).show();
                         } catch(Exception e) {
                             Log.d(tag, "Error when parsing JSON object: " + e);
                         }
@@ -247,4 +250,30 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         builder.show();
     }
 
+    private static String convertDate(long dateInMilliseconds) {
+        String dateFormat = "EEE dd MMM yyyy hh:mm";
+        return DateFormat.format(dateFormat, dateInMilliseconds).toString();
+    }
+
+    private void showInventoryData(JSONObject response) {
+        String name = "Namn";
+        String barcode = "01234567";
+        int inventory = 0;
+        String history = "";
+        try {
+            name = response.getString("name");
+            barcode = response.getString("barcode");
+            inventory = response.getInt("inventory");
+            JSONArray historyJson = response.getJSONArray("history");
+            for(int i=historyJson.length()-1; i>=0; i--) {
+                int change = historyJson.getJSONObject(i).getInt("change");
+                String changeSigned = change > 0 ? "+" + change : "" + change;
+                history += convertDate(historyJson.getJSONObject(i).getLong("date")) + "   " + changeSigned + "\n";
+            }
+        } catch (Exception e) {
+            Log.d(tag, "Fel vid parsning av JSON-objekt.");
+        }
+
+        dbResultTxt.setText(name + "\n" + barcode + "\n" + inventory + " i lager" + "\n\nLagerhistorik:\n\n" + history);
+    }
 }
