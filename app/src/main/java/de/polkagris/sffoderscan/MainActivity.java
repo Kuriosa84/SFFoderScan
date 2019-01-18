@@ -5,6 +5,7 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.content.Intent;
+import android.text.Html;
 import android.text.InputType;
 import android.text.format.DateFormat;
 import android.util.Log;
@@ -15,6 +16,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.android.volley.Response;
@@ -27,8 +29,9 @@ import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity implements OnClickListener {
 
-    private Button scanBtn, searchManuallyBtn, addToInventoryBtn;
-    private TextView contentTxt, dbResultTxt;
+    private Button scanBtn, searchManuallyBtn, addToInventoryBtn, removeFromInventoryBtn;
+    private TextView contentTxt, dbResultTxt, inventoryTxt;
+    private LinearLayout registerButtons;
     private String scanContent;
     private String tag = "MYTAG";
 
@@ -36,10 +39,14 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        registerButtons = findViewById(R.id.register_buttons);
         scanBtn = findViewById(R.id.scan_button);
         searchManuallyBtn = findViewById(R.id.search_manually_button);
         contentTxt = findViewById(R.id.scan_content);
         dbResultTxt = findViewById(R.id.database_result);
+        inventoryTxt = findViewById(R.id.inventory);
+        addToInventoryBtn = findViewById(R.id.add_to_inventory);
+        removeFromInventoryBtn = findViewById(R.id.remove_from_inventory);
         scanBtn.setOnClickListener(this);
         searchManuallyBtn.setOnClickListener(this);
         Log.d(tag, "Är i onCreate!");
@@ -130,7 +137,8 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         builder.setPositiveButton("Sök", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
-                sendSearchRequest(input.getText().toString());
+                scanContent = input.getText().toString();
+                sendSearchRequest(scanContent);
             }
         });
         builder.setNegativeButton("Avbryt", new DialogInterface.OnClickListener() {
@@ -158,7 +166,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
                     showSaveDialog();
                 } else {
                     showInventoryData(response);
-                    addInventoryButtons();
+                    showInventoryButtons();
                 }
             }
         }, new Response.ErrorListener() {
@@ -169,14 +177,10 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
         });
     }
 
-    private void addInventoryButtons() {
-        if(addToInventoryBtn != null) {
-            return;
-        }
-        addToInventoryBtn = new Button(this);
-        Button removeFromInventoryBtn = new Button(this);
-        addToInventoryBtn.setText("Lägg till i lager");
-        removeFromInventoryBtn.setText("Ta från lager");
+    private void showInventoryButtons() {
+        addToInventoryBtn.setVisibility(View.VISIBLE);
+        removeFromInventoryBtn.setVisibility(View.VISIBLE);
+
         addToInventoryBtn.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -189,14 +193,6 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
                 showChangeInventoryDialog(false);
             }
         });
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.gravity = Gravity.CENTER_HORIZONTAL;
-        addToInventoryBtn.setLayoutParams(params);
-        removeFromInventoryBtn.setLayoutParams(params);
-
-        LinearLayout linearLayout = findViewById(R.id.main_linear_layout);
-        linearLayout.addView(addToInventoryBtn);
-        linearLayout.addView(removeFromInventoryBtn);
     }
 
     private void showChangeInventoryDialog(final boolean isAdding) {
@@ -238,7 +234,7 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
                 }, new Response.ErrorListener() {
                     @Override
                     public void onErrorResponse(VolleyError error) {
-
+                        Log.d(tag, "Error when sending request: " + error);
                     }
                 });
             }
@@ -258,12 +254,12 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 
     private void showInventoryData(JSONObject response) {
         String name = "Namn";
-        String barcode = "01234567";
+        //String barcode = "01234567";
         int inventory = 0;
         String history = "";
         try {
             name = response.getString("name");
-            barcode = response.getString("barcode");
+            //barcode = response.getString("barcode");
             inventory = response.getInt("inventory");
             JSONArray historyJson = response.getJSONArray("history");
             for(int i=historyJson.length()-1; i>=0; i--) {
@@ -275,6 +271,15 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
             Log.d(tag, "Fel vid parsning av JSON-objekt.");
         }
 
-        dbResultTxt.setText(name + "\n" + barcode + "\n" + inventory + " i lager" + "\n\nLagerhistorik:\n\n" + history);
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        params.addRule(RelativeLayout.CENTER_HORIZONTAL);
+        registerButtons.setLayoutParams(params);
+
+        dbResultTxt.setVisibility(View.VISIBLE);
+        inventoryTxt.setVisibility(View.VISIBLE);
+        String htmlStr = "<b>" + name + "</b><br>" + inventory + " i lager";
+        dbResultTxt.setText(Html.fromHtml(htmlStr));
+        inventoryTxt.setText("Lagerhistorik:\n\n" + history);
     }
 }
